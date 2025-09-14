@@ -1,122 +1,68 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
+import plotly.express as px
+import time
 
-# --- Sidebar upload ---
-st.sidebar.header("Upload Logs")
-player_file = st.sidebar.file_uploader("Upload Player.csv", type=["csv"])
-objects_file = st.sidebar.file_uploader("Upload Objects.csv", type=["csv"])
+st.title("VR Session Replay")
 
-if player_file and objects_file:
-    # --- Load data ---
-    player_df = pd.read_csv(player_file)
-    objects_df = pd.read_csv(objects_file)
+uploaded_file = st.file_uploader("Upload the VR log CSV", type="csv")
 
-    st.subheader("Preview Data")
-    st.write("**Player.csv**")
-    st.dataframe(player_df.head())
-    st.write("**Objects.csv**")
-    st.dataframe(objects_df.head())
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
 
-    # --- Create frames for animation ---
-    frames = []
-    unique_times = sorted(objects_df["time"].unique())
+    # Categories
+    player_df = df[df["Category"] == "Player"]
+    elephant_df = df[df["Category"] == "Elephant"]
+    tree_df = df[df["Category"] == "Tree"]
 
-    for t in unique_times:
-        frame_objects = objects_df[objects_df["time"] == t]
-        frame_player = player_df[player_df["time"] == t]
+    timestamps = sorted(df["Timestamp"].unique())
+    min_t, max_t = min(timestamps), max(timestamps)
 
-        frame = go.Frame(
-            data=[
-                go.Scatter3d(
-                    x=frame_objects["x"], y=frame_objects["y"], z=frame_objects["z"],
-                    mode="markers",
-                    marker=dict(size=4),
-                    text=frame_objects["objectId"],
-                    name="Objects"
-                ),
-                go.Scatter3d(
-                    x=frame_player["x"], y=frame_player["y"], z=frame_player["z"],
-                    mode="markers+lines",
-                    marker=dict(size=6, color="red"),
-                    line=dict(color="red", width=5),
-                    name="Player"
-                )
-            ],
-            name=str(t)
+    # Sidebar controls
+    step = st.sidebar.slider("Playback speed (seconds per frame)", 0.1, 2.0, 0.5, 0.1)
+
+    # Session state for animation control
+    if "is_playing" not in st.session_state:
+        st.session_state.is_playing = False
+    if "current_t" not in st.session_state:
+        st.session_state.current_t = min_t
+
+    # Manual scrubbing
+    selected_t = st.slider("Scrub timeline", min_value=float(min_t), max_value=float(max_t),
+                           value=float(st.session_state.current_t), step=1.0)
+
+    # Plot function
+    def plot_frame(t):
+        frame_df = df[df["Timestamp"] == t]
+        fig = px.scatter_3d(
+            frame_df,
+            x="PosX", y="PosY", z="PosZ",
+            color="Category",
+            symbol="Category",
+            hover_data=["ObjectName", "Timestamp"],
+            title=f"Time {t:.2f}s"
         )
-        frames.append(frame)
+        st.plotly_chart(fig, use_container_width=True)
 
-    # --- Initial data (first frame) ---
-    init_objects = objects_df[objects_df["time"] == unique_times[0]]
-    init_player = player_df[player_df["time"] == unique_times[0]]
+    # Buttons
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Play"):
+            st.session_state.is_playing = True
+    with col2:
+        if st.button("Pause"):
+            st.session_state.is_playing = False
 
-    fig = go.Figure(
-        data=[
-            go.Scatter3d(
-                x=init_objects["x"], y=init_objects["y"], z=init_objects["z"],
-                mode="markers",
-                marker=dict(size=4),
-                text=init_objects["objectId"],
-                name="Objects"
-            ),
-            go.Scatter3d(
-                x=init_player["x"], y=init_player["y"], z=init_player["z"],
-                mode="markers+lines",
-                marker=dict(size=6, color="red"),
-                line=dict(color="red", width=5),
-                name="Player"
-            )
-        ],
-        layout=go.Layout(
-            title="Player & Objects Animation",
-            updatemenus=[{
-                "buttons": [
-                    {
-                        "args": [None, {"frame": {"duration": 500, "redraw": True},
-                                        "fromcurrent": True}],
-                        "label": "Play",
-                        "method": "animate"
-                    },
-                    {
-                        "args": [[None], {"frame": {"duration": 0, "redraw": True},
-                                          "mode": "immediate",
-                                          "transition": {"duration": 0}}],
-                        "label": "Pause",
-                        "method": "animate"
-                    }
-                ],
-                "direction": "left",
-                "pad": {"r": 10, "t": 70},
-                "showactive": False,
-                "type": "buttons",
-                "x": 0.1,
-                "xanchor": "right",
-                "y": 0,
-                "yanchor": "top"
-            }],
-            sliders=[{
-                "steps": [
-                    {
-                        "args": [[str(t)], {"frame": {"duration": 0, "redraw": True},
-                                            "mode": "immediate",
-                                            "transition": {"duration": 0}}],
-                        "label": str(t),
-                        "method": "animate"
-                    }
-                    for t in unique_times
-                ],
-                "x": 0.1,
-                "len": 0.9,
-                "xanchor": "left",
-                "y": -0.05,
-                "yanchor": "top"
-            }]
-        ),
-        frames=frames
-    )
+    # Manual frame (slider)
+    if not st.session_state.is_playing:
+        st.session_state.current_t = selected_t
+        plot_frame(st.session_state.current_t)
 
-    st.plotly_chart(fig, use_container_width=True)
-
-else:
-    st.info("Please upload both **Player.csv** and **Objects.csv** to start.")
+    # Animation loop
+    if st.session_state.is_playing:
+        for t in timestamps:
+            if not st.session_state.is_playing:
+                break
+            st.session_state.current_t = t
+            plot_frame(t)
+            time.sleep(step)
