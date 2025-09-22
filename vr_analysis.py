@@ -1,60 +1,41 @@
 import pandas as pd
+import matplotlib.pyplot as plt
 import streamlit as st
-import plotly.express as px
+import time
 
-st.title("VR Session Replay (Top-down XZ)")
+# Load CSV
+df = pd.read_csv("your_log.csv")
 
-uploaded_file = st.file_uploader("Upload VR log CSV", type=["csv"])
+# Separate static and dynamic
+static_df = df[df["Category"] == "Tree"]
+dynamic_df = df[df["Category"] != "Tree"]
 
-if uploaded_file is not None:
-    # Try reading tab-delimited first
-    try:
-        df = pd.read_csv(uploaded_file, sep="\t")
-    except:
-        df = pd.read_csv(uploaded_file)
+# Get unique timestamps
+timestamps = sorted(dynamic_df["Timestamp"].unique())
 
-    st.write("Preview of CSV:", df.head())  # Debugging preview
+# Create Streamlit figure
+plot_spot = st.empty()
 
-    # Clean column names
-    df.columns = df.columns.str.strip()
+for t in timestamps:
+    fig, ax = plt.subplots()
 
-    # Extract unique timestamps
-    timestamps = sorted(df["Timestamp"].unique())
+    # --- Static objects (trees) ---
+    ax.scatter(static_df["PosX"], static_df["PosZ"], c="green", marker="^", s=50, label="Tree")
 
-    # Separate static trees
-    tree_df = df[df["Category"] == "Tree"]
+    # --- Dynamic objects (player, elephants, etc.) ---
+    frame = dynamic_df[dynamic_df["Timestamp"] == t]
+    for cat in frame["Category"].unique():
+        cat_data = frame[frame["Category"] == cat]
+        if cat == "Player":
+            ax.scatter(cat_data["PosX"], cat_data["PosZ"], c="blue", marker="o", s=80, label="Player")
+        else:
+            ax.scatter(cat_data["PosX"], cat_data["PosZ"], c="red", marker="s", s=60, label=cat)
 
-    # Duplicate tree rows across all timestamps
-    expanded_trees = pd.concat(
-        [tree_df.assign(Timestamp=t) for t in timestamps],
-        ignore_index=True
-    )
+    ax.set_title(f"Timestamp: {t:.2f}")
+    ax.set_xlabel("Unity X")
+    ax.set_ylabel("Unity Z")
+    ax.legend()
 
-    # Keep dynamic/player objects separate
-    moving_df = df[df["Category"] != "Tree"]
-
-    # Combine back
-    final_df = pd.concat([moving_df, expanded_trees], ignore_index=True)
-
-    # Add XZ projection
-    final_df["pos_x"] = final_df["PosX"]
-    final_df["pos_z"] = final_df["PosZ"]
-
-    # Use timestamp as string for animation frames
-    final_df["time"] = final_df["Timestamp"].astype(str)
-
-    # Animated 2D scatter plot
-    fig = px.scatter(
-        final_df,
-        x="pos_x",
-        y="pos_z",
-        animation_frame="time",
-        animation_group="ObjectName",
-        color="Category",
-        hover_name="ObjectName",
-        title="VR Replay (Top-down XZ)"
-    )
-
-    # Keep map aspect ratio square
-    fig.update_yaxes(scaleanchor="x", scaleratio=1)
-    st.plotly_chart(fig, use_container_width=True)
+    plot_spot.pyplot(fig)
+    plt.close(fig)
+    time.sleep(0.2)  # Controls animation speed
