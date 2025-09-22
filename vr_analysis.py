@@ -2,33 +2,36 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# Load CSV
-df = pd.read_csv("vr_log.csv")
+st.title("VR Object Replay (2D)")
 
-# Flatten Unity’s (X,Z), ignore Y
-df["pos_x"] = df["pos_x"]
-df["pos_y"] = df["pos_z"]   # use Z as Y in 2D map
+uploaded_file = st.file_uploader("Upload VR log CSV", type="csv")
 
-# Optional: make labels cleaner
-df["object"] = df["object"].astype(str)
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
 
-# Animated scatter in 2D
-fig = px.scatter(
-    df,
-    x="pos_x",
-    y="pos_y",
-    color="object",
-    animation_frame="time",
-    animation_group="object",
-    hover_name="object",
-    title="2D Top-Down Replay (X–Z Plane)"
-)
+    # Flatten Unity (X,Z), ignore Y
+    df["pos_x"] = df["pos_x"]
+    df["pos_y"] = df["pos_z"]
 
-# Fix aspect ratio so distances are preserved
-fig.update_layout(
-    yaxis=dict(scaleanchor="x", scaleratio=1),
-    width=800,
-    height=800
-)
+    df["object"] = df["object"].astype(str)
 
-st.plotly_chart(fig)
+    fig = px.scatter(
+        df,
+        x="pos_x",
+        y="pos_y",
+        color="object",
+        animation_frame="time",
+        animation_group="object",
+        hover_name="object",
+        title="2D Top-Down Replay (X–Z Plane)"
+    )
+
+    fig.update_layout(
+        yaxis=dict(scaleanchor="x", scaleratio=1),
+        width=800,
+        height=800
+    )
+
+    st.plotly_chart(fig)
+else:
+    st.info("Please upload a `vr_log.csv` file.")
