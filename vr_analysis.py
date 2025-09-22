@@ -2,64 +2,33 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-st.title("🎬 VR Session Replay (Fixed Multiple Objects)")
+# Load CSV
+df = pd.read_csv("vr_log.csv")
 
-uploaded_file = st.file_uploader("Upload VR Log CSV", type="csv")
+# Flatten Unity’s (X,Z), ignore Y
+df["pos_x"] = df["pos_x"]
+df["pos_y"] = df["pos_z"]   # use Z as Y in 2D map
 
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
+# Optional: make labels cleaner
+df["object"] = df["object"].astype(str)
 
-    st.subheader("📄 Data Preview")
-    st.write(df.head())
+# Animated scatter in 2D
+fig = px.scatter(
+    df,
+    x="pos_x",
+    y="pos_y",
+    color="object",
+    animation_frame="time",
+    animation_group="object",
+    hover_name="object",
+    title="2D Top-Down Replay (X–Z Plane)"
+)
 
-    # ✅ Make sure each object has a unique ID
-    df["ObjectID"] = df.groupby("ObjectName").cumcount().astype(str)
-    df["UniqueName"] = df["ObjectName"] + "_" + df["ObjectID"]
+# Fix aspect ratio so distances are preserved
+fig.update_layout(
+    yaxis=dict(scaleanchor="x", scaleratio=1),
+    width=800,
+    height=800
+)
 
-    # Separate static and dynamic
-    trees = df[df["Category"] == "Tree"]
-    moving = df[df["Category"] != "Tree"]
-
-    # Ensure trees appear in every frame (so they stay visible)
-    timestamps = moving["Timestamp"].unique()
-    trees_expanded = pd.DataFrame([
-        {
-            "Timestamp": t,
-            "ObjectName": row.ObjectName,
-            "UniqueName": row.UniqueName,
-            "PosX": row.PosX,
-            "PosY": row.PosY,
-            "PosZ": row.PosZ,
-            "Category": row.Category
-        }
-        for t in timestamps
-        for _, row in trees.iterrows()
-    ])
-
-    # Merge back
-    full_df = pd.concat([moving, trees_expanded], ignore_index=True)
-
-    # ✅ Use UniqueName to keep each tree/elephant separate
-    fig = px.scatter_3d(
-        full_df,
-        x="PosX", y="PosY", z="PosZ",
-        color="Category",
-        symbol="Category",
-        animation_frame="Timestamp",
-        animation_group="UniqueName",
-        hover_data=["ObjectName", "Category"],
-        title="VR Replay (All Objects)"
-    )
-
-    # Tweak visuals
-    fig.update_traces(marker=dict(size=6))
-    fig.update_layout(
-        scene=dict(
-            xaxis_title="X",
-            yaxis_title="Y",
-            zaxis_title="Z"
-        ),
-        legend=dict(title="Object Type")
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig)
