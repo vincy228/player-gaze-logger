@@ -1,37 +1,30 @@
-import streamlit as st
 import pandas as pd
+import streamlit as st
 import plotly.express as px
 
-st.title("VR Object Replay (2D)")
+# Load CSV
+df = pd.read_csv("vr_log.csv", sep="\t")  # <-- use sep="\t" if it's tab-delimited
 
-uploaded_file = st.file_uploader("Upload VR log CSV", type="csv")
+# Show columns for debugging
+st.write("CSV Columns:", df.columns.tolist())
+st.write(df.head())
 
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
+# Use correct column names
+df["pos_x"] = df["PosX"]
+df["pos_y"] = df["PosZ"]   # ignore Unity Y (use Z for 2D map)
+df["time"] = df["Timestamp"]
 
-    # Flatten Unity (X,Z), ignore Y
-    df["pos_x"] = df["pos_x"]
-    df["pos_y"] = df["pos_z"]
+# Plot 2D replay
+fig = px.scatter(
+    df,
+    x="pos_x",
+    y="pos_y",
+    animation_frame="time",
+    animation_group="ObjectName",
+    color="Category",
+    hover_name="ObjectName",
+    title="VR Replay (2D)"
+)
 
-    df["object"] = df["object"].astype(str)
-
-    fig = px.scatter(
-        df,
-        x="pos_x",
-        y="pos_y",
-        color="object",
-        animation_frame="time",
-        animation_group="object",
-        hover_name="object",
-        title="2D Top-Down Replay (X–Z Plane)"
-    )
-
-    fig.update_layout(
-        yaxis=dict(scaleanchor="x", scaleratio=1),
-        width=800,
-        height=800
-    )
-
-    st.plotly_chart(fig)
-else:
-    st.info("Please upload a `vr_log.csv` file.")
+fig.update_yaxes(scaleanchor="x", scaleratio=1)
+st.plotly_chart(fig)
