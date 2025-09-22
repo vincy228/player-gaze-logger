@@ -2,37 +2,38 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 
-st.title("VR Session Replay (2D)")
+st.title("VR Session Replay (Top-down 2D)")
 
 # Upload CSV file
 uploaded_file = st.file_uploader("Upload VR log CSV", type=["csv"])
 
 if uploaded_file is not None:
-    # Read uploaded CSV (try comma first, then tab)
+    # Read uploaded CSV (comma first, then tab)
     try:
         df = pd.read_csv(uploaded_file)
     except:
         df = pd.read_csv(uploaded_file, sep="\t")
 
-    # Show columns for debugging
+    # Show CSV columns for debugging
     st.write("CSV Columns:", df.columns.tolist())
     st.write(df.head())
 
-    # Normalize column names
+    # Use Unity X and Z (ignore Y)
     df["pos_x"] = df["PosX"]
-    df["pos_y"] = df["PosZ"]   # ignore Unity Y, use Z
+    df["pos_z"] = df["PosZ"]   # Z is depth
+
     df["time"] = df["Timestamp"]
 
-    # 2D animated scatter plot
+    # Animated 2D scatter (top-down map)
     fig = px.scatter(
         df,
         x="pos_x",
-        y="pos_y",
+        y="pos_z",
         animation_frame="time",
         animation_group="ObjectName",
         color="Category",
         hover_name="ObjectName",
-        title="VR Replay (2D)"
+        title="VR Replay (Top-down XZ view)"
     )
 
     # Keep aspect ratio equal
