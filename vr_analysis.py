@@ -3,39 +3,42 @@ import matplotlib.pyplot as plt
 import streamlit as st
 import time
 
-# Load CSV
-df = pd.read_csv("your_log.csv")
+# Upload CSV file
+uploaded_file = st.file_uploader("Upload your log CSV", type=["csv"])
 
-# Separate static and dynamic
-static_df = df[df["Category"] == "Tree"]
-dynamic_df = df[df["Category"] != "Tree"]
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
 
-# Get unique timestamps
-timestamps = sorted(dynamic_df["Timestamp"].unique())
+    # Separate static and dynamic
+    static_df = df[df["Category"] == "Tree"]
+    dynamic_df = df[df["Category"] != "Tree"]
 
-# Create Streamlit figure
-plot_spot = st.empty()
+    # Get unique timestamps
+    timestamps = sorted(dynamic_df["Timestamp"].unique())
 
-for t in timestamps:
-    fig, ax = plt.subplots()
+    # Create Streamlit figure
+    plot_spot = st.empty()
 
-    # --- Static objects (trees) ---
-    ax.scatter(static_df["PosX"], static_df["PosZ"], c="green", marker="^", s=50, label="Tree")
+    for t in timestamps:
+        fig, ax = plt.subplots()
 
-    # --- Dynamic objects (player, elephants, etc.) ---
-    frame = dynamic_df[dynamic_df["Timestamp"] == t]
-    for cat in frame["Category"].unique():
-        cat_data = frame[frame["Category"] == cat]
-        if cat == "Player":
-            ax.scatter(cat_data["PosX"], cat_data["PosZ"], c="blue", marker="o", s=80, label="Player")
-        else:
-            ax.scatter(cat_data["PosX"], cat_data["PosZ"], c="red", marker="s", s=60, label=cat)
+        # Static objects (trees)
+        ax.scatter(static_df["PosX"], static_df["PosZ"], c="green", marker="^", s=50, label="Tree")
 
-    ax.set_title(f"Timestamp: {t:.2f}")
-    ax.set_xlabel("Unity X")
-    ax.set_ylabel("Unity Z")
-    ax.legend()
+        # Dynamic objects
+        frame = dynamic_df[dynamic_df["Timestamp"] == t]
+        for cat in frame["Category"].unique():
+            cat_data = frame[frame["Category"] == cat]
+            if cat == "Player":
+                ax.scatter(cat_data["PosX"], cat_data["PosZ"], c="blue", marker="o", s=80, label="Player")
+            else:
+                ax.scatter(cat_data["PosX"], cat_data["PosZ"], c="red", marker="s", s=60, label=cat)
 
-    plot_spot.pyplot(fig)
-    plt.close(fig)
-    time.sleep(0.2)  # Controls animation speed
+        ax.set_title(f"Timestamp: {t:.2f}")
+        ax.set_xlabel("Unity X")
+        ax.set_ylabel("Unity Z")
+        ax.legend()
+
+        plot_spot.pyplot(fig)
+        plt.close(fig)
+        time.sleep(0.2)  # Animation speed
