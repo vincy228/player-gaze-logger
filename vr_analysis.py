@@ -2,40 +2,59 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 
-st.title("VR Session Replay (Top-down 2D)")
+st.title("VR Session Replay (Top-down XZ)")
 
-# Upload CSV file
 uploaded_file = st.file_uploader("Upload VR log CSV", type=["csv"])
 
 if uploaded_file is not None:
-    # Read uploaded CSV (comma first, then tab)
+    # Try reading tab-delimited first
     try:
-        df = pd.read_csv(uploaded_file)
-    except:
         df = pd.read_csv(uploaded_file, sep="\t")
+    except:
+        df = pd.read_csv(uploaded_file)
 
-    # Show CSV columns for debugging
-    st.write("CSV Columns:", df.columns.tolist())
-    st.write(df.head())
+    st.write("Preview of CSV:", df.head())  # Debugging preview
 
-    # Use Unity X and Z (ignore Y)
-    df["pos_x"] = df["PosX"]
-    df["pos_z"] = df["PosZ"]   # Z is depth
+    # Clean column names
+    df.columns = df.columns.str.strip()
 
-    df["time"] = df["Timestamp"]
+    # Extract unique timestamps
+    timestamps = sorted(df["Timestamp"].unique())
 
-    # Animated 2D scatter (top-down map)
+    # Separate static trees
+    tree_df = df[df["Category"] == "Tree"]
+
+    # Duplicate tree rows across all timestamps
+    expanded_trees = pd.concat(
+        [tree_df.assign(Timestamp=t) for t in timestamps],
+        ignore_index=True
+    )
+
+    # Keep dynamic/player objects separate
+    moving_df = df[df["Category"] != "Tree"]
+
+    # Combine back
+    final_df = pd.concat([moving_df, expanded_trees], ignore_index=True)
+
+    # Add XZ projection
+    final_df["pos_x"] = final_df["PosX"]
+    final_df["pos_z"] = final_df["PosZ"]
+
+    # Use timestamp as string for animation frames
+    final_df["time"] = final_df["Timestamp"].astype(str)
+
+    # Animated 2D scatter plot
     fig = px.scatter(
-        df,
+        final_df,
         x="pos_x",
         y="pos_z",
         animation_frame="time",
         animation_group="ObjectName",
         color="Category",
         hover_name="ObjectName",
-        title="VR Replay (Top-down XZ view)"
+        title="VR Replay (Top-down XZ)"
     )
 
-    # Keep aspect ratio equal
+    # Keep map aspect ratio square
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     st.plotly_chart(fig, use_container_width=True)
