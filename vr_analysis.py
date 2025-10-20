@@ -23,11 +23,15 @@ if uploaded_file:
         st.session_state.timestamp_index = 0
 
     # --- Layout ---
-    st.write(f"⏱️ Current Timestamp: {timestamps[st.session_state.timestamp_index]:.2f}")
+    current_time = timestamps[st.session_state.timestamp_index]
+    st.write(f"⏱️ Current Timestamp: {current_time:.2f}")
 
     # --- Play / Pause toggle ---
     def toggle_play():
         st.session_state.is_playing = not st.session_state.is_playing
+        # If playback finished and user presses Continue — restart from beginning
+        if st.session_state.timestamp_index >= len(timestamps) - 1:
+            st.session_state.timestamp_index = 0
 
     play_label = "⏸ Pause" if st.session_state.is_playing else "▶ Continue"
     st.button(play_label, on_click=toggle_play)
@@ -66,8 +70,9 @@ if uploaded_file:
             render_frame(i)
             time.sleep(0.05)
 
-        # Stop at end
+        # When reach end, pause and reset index for replay
         if st.session_state.timestamp_index >= len(timestamps) - 1:
+            st.session_state.timestamp_index = len(timestamps) - 1
             st.session_state.is_playing = False
     else:
         # Show paused frame
