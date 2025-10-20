@@ -21,12 +21,9 @@ if uploaded_file:
     if "timestamp_index" not in st.session_state:
         st.session_state.timestamp_index = 0
 
-    # --- Button ---
+    # --- Play / Pause toggle ---
     def toggle_play():
         st.session_state.is_playing = not st.session_state.is_playing
-        # Restart if ended
-        if st.session_state.timestamp_index >= len(timestamps) - 1:
-            st.session_state.timestamp_index = 0
 
     play_label = "⏸ Pause" if st.session_state.is_playing else "▶ Play"
     st.button(play_label, on_click=toggle_play)
@@ -53,11 +50,13 @@ if uploaded_file:
     st.pyplot(fig)
     plt.close(fig)
 
-    # --- Playback control ---
+    # --- Playback loop logic ---
     if st.session_state.is_playing:
         time.sleep(0.05)
         st.session_state.timestamp_index += 1
+
+        # Loop back to start automatically when end is reached
         if st.session_state.timestamp_index >= len(timestamps):
-            st.session_state.timestamp_index = 0  # loop
-            st.session_state.is_playing = False  # or True if you want auto-loop
+            st.session_state.timestamp_index = 0
+
         st.rerun()
