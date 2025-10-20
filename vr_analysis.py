@@ -21,28 +21,34 @@ if uploaded_file:
         st.session_state.is_playing = True  # auto-play on start
     if "timestamp_index" not in st.session_state:
         st.session_state.timestamp_index = 0
+    if "play_speed" not in st.session_state:
+        st.session_state.play_speed = 1.0
 
-    # --- Placeholders for dynamic content ---
+    # --- Placeholders ---
     timestamp_placeholder = st.empty()
     plot_placeholder = st.empty()
 
-    # --- Play / Pause toggle ---
-    def toggle_play():
-        st.session_state.is_playing = not st.session_state.is_playing
-        # If playback finished and user presses Continue — restart from beginning
-        if st.session_state.timestamp_index >= len(timestamps) - 1:
-            st.session_state.timestamp_index = 0
+    # --- Controls ---
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        def toggle_play():
+            st.session_state.is_playing = not st.session_state.is_playing
+            # Restart if at end
+            if st.session_state.timestamp_index >= len(timestamps) - 1:
+                st.session_state.timestamp_index = 0
 
-    play_label = "⏸ Pause" if st.session_state.is_playing else "▶ Continue"
-    st.button(play_label, on_click=toggle_play)
+        play_label = "⏸ Pause" if st.session_state.is_playing else "▶ Play"
+        st.button(play_label, on_click=toggle_play)
 
-    # --- Function to render frame ---
+    with col2:
+        st.session_state.play_speed = st.slider("Playback Speed (×)", 0.25, 4.0, st.session_state.play_speed, 0.25)
+
+    # --- Function to render one frame ---
     def render_frame(idx):
         nearest_t = timestamps[idx]
         frame = dynamic_df[dynamic_df["Timestamp"] == nearest_t]
 
-        # Update timestamp text dynamically
-        timestamp_placeholder.markdown(f"**⏱️ Current Timestamp:** `{nearest_t:.2f}`")
+        timestamp_placeholder.markdown(f"**⏱ Timestamp:** `{nearest_t:.2f}`")
 
         fig, ax = plt.subplots()
         ax.scatter(static_df["PosX"], static_df["PosZ"], c="green", marker="^", s=50, label="Tree")
@@ -61,19 +67,19 @@ if uploaded_file:
         plot_placeholder.pyplot(fig)
         plt.close(fig)
 
-    # --- Playback loop ---
+    # --- Playback Loop ---
     if st.session_state.is_playing:
         for i in range(st.session_state.timestamp_index, len(timestamps)):
             if not st.session_state.is_playing:
                 break
             st.session_state.timestamp_index = i
             render_frame(i)
-            time.sleep(0.05)
+            # Adjusted sleep time inversely proportional to playback speed
+            time.sleep(max(0.01, 0.05 / st.session_state.play_speed))
 
-        # When reach end, pause and reset index for replay
+        # Auto-stop and reset at end
         if st.session_state.timestamp_index >= len(timestamps) - 1:
-            st.session_state.timestamp_index = len(timestamps) - 1
             st.session_state.is_playing = False
+            st.session_state.timestamp_index = len(timestamps) - 1
     else:
-        # Show paused frame
         render_frame(st.session_state.timestamp_index)
