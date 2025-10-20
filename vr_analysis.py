@@ -22,9 +22,9 @@ if uploaded_file:
     if "timestamp_index" not in st.session_state:
         st.session_state.timestamp_index = 0
 
-    # --- Layout ---
-    current_time = timestamps[st.session_state.timestamp_index]
-    st.write(f"⏱️ Current Timestamp: {current_time:.2f}")
+    # --- Placeholders for dynamic content ---
+    timestamp_placeholder = st.empty()
+    plot_placeholder = st.empty()
 
     # --- Play / Pause toggle ---
     def toggle_play():
@@ -36,13 +36,13 @@ if uploaded_file:
     play_label = "⏸ Pause" if st.session_state.is_playing else "▶ Continue"
     st.button(play_label, on_click=toggle_play)
 
-    # --- Plot placeholder ---
-    plot_placeholder = st.empty()
-
     # --- Function to render frame ---
     def render_frame(idx):
         nearest_t = timestamps[idx]
         frame = dynamic_df[dynamic_df["Timestamp"] == nearest_t]
+
+        # Update timestamp text dynamically
+        timestamp_placeholder.markdown(f"**⏱️ Current Timestamp:** `{nearest_t:.2f}`")
 
         fig, ax = plt.subplots()
         ax.scatter(static_df["PosX"], static_df["PosZ"], c="green", marker="^", s=50, label="Tree")
