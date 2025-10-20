@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import streamlit as st
 import time
 
+st.set_page_config(page_title="VR Log Viewer", layout="centered")
 st.title("VR Log Viewer")
 
 uploaded_file = st.file_uploader("Upload your Unity log CSV", type=["csv"])
@@ -13,10 +14,9 @@ if uploaded_file:
     # Separate static and dynamic
     static_df = df[df["Category"] == "Tree"]
     dynamic_df = df[df["Category"] != "Tree"]
-
     timestamps = sorted(dynamic_df["Timestamp"].unique())
 
-    # --- Initialize session state ---
+    # --- Session state ---
     if "playing" not in st.session_state:
         st.session_state.playing = False
     if "t_index" not in st.session_state:
@@ -26,36 +26,28 @@ if uploaded_file:
     col1, col2 = st.columns([1, 4])
 
     with col1:
-        if st.session_state.playing:
-            if st.button("⏸️ Pause", key="pause_btn"):
-                st.session_state.playing = False
-        else:
-            if st.button("▶️ Play", key="play_btn"):
-                st.session_state.playing = True
+        play_label = "⏸️ Pause" if st.session_state.playing else "▶️ Play"
+        if st.button(play_label):
+            st.session_state.playing = not st.session_state.playing
 
     with col2:
-        # Display the slider based on the current index
         selected_t = st.slider(
             "Select Timestamp",
             min_value=float(min(timestamps)),
             max_value=float(max(timestamps)),
             value=float(timestamps[st.session_state.t_index]),
             step=0.01,
-            key="time_slider_display"
         )
 
-    # --- Update index if user scrubs manually ---
-    manual_index = min(
-        range(len(timestamps)),
-        key=lambda i: abs(timestamps[i] - selected_t)
-    )
+    # --- Manual scrub update ---
+    manual_index = min(range(len(timestamps)),
+                       key=lambda i: abs(timestamps[i] - selected_t))
     if not st.session_state.playing:
         st.session_state.t_index = manual_index
 
-    # --- Placeholder for the live plot ---
-    placeholder = st.empty()
+    # --- Create a placeholder for the figure ---
+    plot_area = st.empty()
 
-    # --- Drawing function ---
     def draw_frame(index):
         nearest_t = timestamps[index]
         frame = dynamic_df[dynamic_df["Timestamp"] == nearest_t]
@@ -76,18 +68,20 @@ if uploaded_file:
         ax.set_xlabel("Unity X")
         ax.set_ylabel("Unity Z")
         ax.legend()
-        placeholder.pyplot(fig)
+        plot_area.pyplot(fig)
 
-    # --- Playback loop ---
+    # --- Main animation loop ---
+    draw_frame(st.session_state.t_index)
+
     if st.session_state.playing:
-        if st.session_state.t_index >= len(timestamps) - 1:
-            st.session_state.t_index = 0  # restart if at end
+        # While playing, continuously update frames within one run
+        speed = 0.2  # seconds per frame
+        for i in range(st.session_state.t_index, len(timestamps)):
+            if not st.session_state.playing:
+                break
 
-        draw_frame(st.session_state.t_index)
-        time.sleep(0.2)
-        st.session_state.t_index += 1
-        st.rerun()
+            st.session_state.t_index = i
+            draw_frame(i)
+            time.sleep(speed)
 
-    else:
-        # --- Manual display (paused) ---
-        draw_frame(st.session_state.t_index)
+        st.session_state.playing = False
