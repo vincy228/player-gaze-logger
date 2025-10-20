@@ -1,63 +1,99 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
+import matplotlib.pyplot as plt
 import time
 
-st.set_page_config(page_title="VR Gaze Playback", layout="wide")
+st.set_page_config(page_title="VR Log Viewer", layout="wide")
+st.title("VR Log Viewer")
 
-# --- Load your log file ---
-# Replace with your actual CSV path or uploader
-uploaded_file = st.file_uploader("Upload gaze log CSV", type=["csv"])
+uploaded_file = st.file_uploader("Upload your Unity log CSV", type=["csv"])
 
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
-    if 'timestamp' not in df.columns:
-        st.error("CSV must contain a 'timestamp' column.")
-    else:
-        timestamps = df['timestamp'].values
-        st.write(f"Loaded {len(timestamps)} frames from log file.")
 
-        # --- Playback controls ---
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            if "playing" not in st.session_state:
-                st.session_state.playing = True
-            if "current_idx" not in st.session_state:
-                st.session_state.current_idx = 0
-            if "play_speed" not in st.session_state:
-                st.session_state.play_speed = 1.0  # seconds per step
+    # --- Detect existing time-like column ---
+    time_columns = [c for c in df.columns if any(x in c.lower() for x in ["time", "timestamp", "frame"])]
+    if not time_columns:
+        st.error("❌ No time-related column found. Please include one (e.g., time, timestamp, frame_time).")
+        st.stop()
 
-            if st.button("⏯ Play / Pause"):
-                st.session_state.playing = not st.session_state.playing
+    time_col = time_columns[0]
+    timestamps = sorted(df[time_col].unique())
 
-            st.session_state.play_speed = st.slider("Play speed (s/step)", 0.05, 1.0, st.session_state.play_speed, 0.05)
+    # --- Separate static and dynamic ---
+    static_df = df[df["Category"] == "Tree"]
+    dynamic_df = df[df["Category"] != "Tree"]
 
-        with col2:
-            st.progress(st.session_state.current_idx / len(timestamps))
+    # --- Session state ---
+    if "playing" not in st.session_state:
+        st.session_state.playing = True
+    if "idx" not in st.session_state:
+        st.session_state.idx = 0
+    if "speed" not in st.session_state:
+        st.session_state.speed = 1.0
 
-        # --- Playback loop ---
-        placeholder = st.empty()
+    # --- Controls ---
+    c1, c2 = st.columns([1, 4])
+    with c1:
+        if st.button("⏯ Play / Pause"):
+            st.session_state.playing = not st.session_state.playing
 
-        while st.session_state.playing:
-            current_idx = st.session_state.current_idx
+        st.session_state.speed = st.slider(
+            "Playback Speed (×)", 0.25, 4.0, st.session_state.speed, 0.25
+        )
 
-            # Stop at end and auto-reset
-            if current_idx >= len(timestamps):
-                st.session_state.playing = False
-                st.session_state.current_idx = 0
-                st.experimental_rerun()
+    with c2:
+        st.progress(st.session_state.idx / len(timestamps))
 
-            # Simulated "frame display"
-            placeholder.write(f"🎯 Frame {current_idx + 1}/{len(timestamps)} — Timestamp: {timestamps[current_idx]:.2f}")
+    # --- Placeholder for figure ---
+    fig_placeholder = st.empty()
 
-            # Next frame
-            st.session_state.current_idx += 1
+    # --- Playback loop ---
+    start_real_time = time.time()
+    start_log_time = timestamps[st.session_state.idx]
 
-            time.sleep(st.session_state.play_speed)
+    while st.session_state.playing and st.session_state.idx < len(timestamps) - 1:
+        elapsed_real = time.time() - start_real_time
+        target_time = start_log_time + elapsed_real * st.session_state.speed
 
-        # When paused, show current frame
-        if not st.session_state.playing and st.session_state.current_idx < len(timestamps):
-            placeholder.write(f"⏸ Paused at frame {st.session_state.current_idx + 1}/{len(timestamps)}")
+        # Move index forward based on time
+        while (
+            st.session_state.idx + 1 < len(timestamps)
+            and timestamps[st.session_state.idx + 1] <= target_time
+        ):
+            st.session_state.idx += 1
+
+        # --- Plot the current frame ---
+        frame = dynamic_df[dynamic_df[time_col] == timestamps[st.session_state.idx]]
+        fig, ax = plt.subplots()
+
+        # Plot static trees
+        ax.scatter(static_df["PosX"], static_df["PosZ"], c="green", marker="^", s=50, label="Tree")
+
+        # Plot dynamic objects
+        for cat in frame["Category"].unique():
+            cat_data = frame[frame["Category"] == cat]
+            color = "blue" if cat == "Player" else "red"
+            marker = "o" if cat == "Player" else "s"
+            size = 80 if cat == "Player" else 60
+            ax.scatter(cat_data["PosX"], cat_data["PosZ"], c=color, marker=marker, s=size, label=cat)
+
+        ax.set_title(f"Timestamp: {timestamps[st.session_state.idx]:.2f}")
+        ax.set_xlabel("Unity X")
+        ax.set_ylabel("Unity Z")
+        ax.legend()
+        fig_placeholder.pyplot(fig)
+        plt.close(fig)
+
+        time.sleep(0.05)  # control frame rate
+
+    # --- End or pause behavior ---
+    if st.session_state.idx >= len(timestamps) - 1:
+        st.session_state.idx = 0
+        st.session_state.playing = False
+        fig_placeholder.info("🏁 Reached end of log — stopped.")
+    elif not st.session_state.playing:
+        fig_placeholder.info(f"⏸ Paused at frame {st.session_state.idx + 1}/{len(timestamps)}")
 
 else:
-    st.info("Please upload a log file to begin playback.")
+    st.info("📁 Please upload your Unity log CSV to begin playback.")
