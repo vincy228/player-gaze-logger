@@ -25,19 +25,6 @@ if uploaded_file:
     # --- Layout ---
     st.write(f"⏱️ Current Timestamp: {timestamps[st.session_state.timestamp_index]:.2f}")
 
-    # --- Slider for manual scrubbing ---
-    slider_val = st.slider(
-        "Select Timestamp",
-        0,
-        len(timestamps) - 1,
-        st.session_state.timestamp_index,
-        key="slider",
-    )
-
-    # If user moves slider manually, sync playback
-    if slider_val != st.session_state.timestamp_index:
-        st.session_state.timestamp_index = slider_val
-
     # --- Play / Pause toggle ---
     def toggle_play():
         st.session_state.is_playing = not st.session_state.is_playing
@@ -48,7 +35,7 @@ if uploaded_file:
     # --- Plot placeholder ---
     plot_placeholder = st.empty()
 
-    # --- Function to render current frame ---
+    # --- Function to render frame ---
     def render_frame(idx):
         nearest_t = timestamps[idx]
         frame = dynamic_df[dynamic_df["Timestamp"] == nearest_t]
@@ -75,14 +62,13 @@ if uploaded_file:
         for i in range(st.session_state.timestamp_index, len(timestamps)):
             if not st.session_state.is_playing:
                 break
-
             st.session_state.timestamp_index = i
             render_frame(i)
             time.sleep(0.05)
 
-        # Stop when reach end
+        # Stop at end
         if st.session_state.timestamp_index >= len(timestamps) - 1:
             st.session_state.is_playing = False
     else:
-        # Just render the paused frame
+        # Show paused frame
         render_frame(st.session_state.timestamp_index)
