@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
-import time
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="VR Log Viewer", layout="centered")
 st.title("VR Log Viewer")
@@ -22,9 +22,13 @@ if uploaded_file:
     if "t_index" not in st.session_state:
         st.session_state.t_index = 0
 
+    # --- Auto-refresh during playback ---
+    if st.session_state.playing:
+        # Refresh every 200ms to animate playback
+        st_autorefresh(interval=200, limit=None, key="frame_refresh")
+
     # --- Controls ---
     col1, col2 = st.columns([1, 4])
-
     with col1:
         play_label = "⏸️ Pause" if st.session_state.playing else "▶️ Play"
         if st.button(play_label):
@@ -39,49 +43,37 @@ if uploaded_file:
             step=0.01,
         )
 
-    # --- Manual scrub update ---
-    manual_index = min(range(len(timestamps)),
-                       key=lambda i: abs(timestamps[i] - selected_t))
+    # --- Manual scrub (only when paused) ---
     if not st.session_state.playing:
-        st.session_state.t_index = manual_index
+        st.session_state.t_index = min(
+            range(len(timestamps)),
+            key=lambda i: abs(timestamps[i] - selected_t)
+        )
 
-    # --- Create a placeholder for the figure ---
-    plot_area = st.empty()
-
-    def draw_frame(index):
-        nearest_t = timestamps[index]
-        frame = dynamic_df[dynamic_df["Timestamp"] == nearest_t]
-
-        fig, ax = plt.subplots()
-        ax.scatter(static_df["PosX"], static_df["PosZ"],
-                   c="green", marker="^", s=50, label="Tree")
-
-        for cat in frame["Category"].unique():
-            cat_data = frame[frame["Category"] == cat]
-            color = "blue" if cat == "Player" else "red"
-            marker = "o" if cat == "Player" else "s"
-            size = 80 if cat == "Player" else 60
-            ax.scatter(cat_data["PosX"], cat_data["PosZ"],
-                       c=color, marker=marker, s=size, label=cat)
-
-        ax.set_title(f"Timestamp: {nearest_t:.2f}")
-        ax.set_xlabel("Unity X")
-        ax.set_ylabel("Unity Z")
-        ax.legend()
-        plot_area.pyplot(fig)
-
-    # --- Main animation loop ---
-    draw_frame(st.session_state.t_index)
-
+    # --- Advance frame automatically if playing ---
     if st.session_state.playing:
-        # While playing, continuously update frames within one run
-        speed = 0.2  # seconds per frame
-        for i in range(st.session_state.t_index, len(timestamps)):
-            if not st.session_state.playing:
-                break
+        st.session_state.t_index += 1
+        if st.session_state.t_index >= len(timestamps):
+            st.session_state.t_index = 0
 
-            st.session_state.t_index = i
-            draw_frame(i)
-            time.sleep(speed)
+    # --- Draw frame ---
+    nearest_t = timestamps[st.session_state.t_index]
+    frame = dynamic_df[dynamic_df["Timestamp"] == nearest_t]
 
-        st.session_state.playing = False
+    fig, ax = plt.subplots()
+    ax.scatter(static_df["PosX"], static_df["PosZ"],
+               c="green", marker="^", s=50, label="Tree")
+
+    for cat in frame["Category"].unique():
+        cat_data = frame[frame["Category"] == cat]
+        color = "blue" if cat == "Player" else "red"
+        marker = "o" if cat == "Player" else "s"
+        size = 80 if cat == "Player" else 60
+        ax.scatter(cat_data["PosX"], cat_data["PosZ"],
+                   c=color, marker=marker, s=size, label=cat)
+
+    ax.set_title(f"Timestamp: {nearest_t:.2f}")
+    ax.set_xlabel("Unity X")
+    ax.set_ylabel("Unity Z")
+    ax.legend()
+    st.pyplot(fig)
