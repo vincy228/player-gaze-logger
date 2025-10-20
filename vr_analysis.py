@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
+import time
 
 st.set_page_config(page_title="VR Log Viewer", layout="centered")
 st.title("VR Log Viewer")
@@ -16,23 +16,21 @@ if uploaded_file:
     dynamic_df = df[df["Category"] != "Tree"]
     timestamps = sorted(dynamic_df["Timestamp"].unique())
 
-    # --- Session state ---
+    # --- Session state initialization ---
     if "playing" not in st.session_state:
         st.session_state.playing = False
     if "t_index" not in st.session_state:
         st.session_state.t_index = 0
+    if "last_update" not in st.session_state:
+        st.session_state.last_update = time.time()
 
-    # --- Auto-refresh during playback ---
-    if st.session_state.playing:
-        # Refresh every 200ms to animate playback
-        st_autorefresh(interval=200, limit=None, key="frame_refresh")
-
-    # --- Controls ---
+    # --- UI Controls ---
     col1, col2 = st.columns([1, 4])
     with col1:
         play_label = "⏸️ Pause" if st.session_state.playing else "▶️ Play"
         if st.button(play_label):
             st.session_state.playing = not st.session_state.playing
+            st.session_state.last_update = time.time()
 
     with col2:
         selected_t = st.slider(
@@ -43,20 +41,25 @@ if uploaded_file:
             step=0.01,
         )
 
-    # --- Manual scrub (only when paused) ---
+    # --- Manual scrubbing when paused ---
     if not st.session_state.playing:
         st.session_state.t_index = min(
             range(len(timestamps)),
             key=lambda i: abs(timestamps[i] - selected_t)
         )
 
-    # --- Advance frame automatically if playing ---
-    if st.session_state.playing:
+    # --- Auto advance if playing ---
+    frame_interval = 0.2  # seconds between frames
+    now = time.time()
+    if st.session_state.playing and now - st.session_state.last_update > frame_interval:
         st.session_state.t_index += 1
         if st.session_state.t_index >= len(timestamps):
-            st.session_state.t_index = 0
+            st.session_state.t_index = 0  # loop to start
+        st.session_state.last_update = now
+        # Force re-render for the next frame
+        st.experimental_rerun()
 
-    # --- Draw frame ---
+    # --- Draw current frame ---
     nearest_t = timestamps[st.session_state.t_index]
     frame = dynamic_df[dynamic_df["Timestamp"] == nearest_t]
 
