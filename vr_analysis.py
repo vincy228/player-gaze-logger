@@ -57,7 +57,7 @@ if uploaded_file:
             st.session_state.t_index = 0  # loop to start
         st.session_state.last_update = now
         # Force re-render for the next frame
-        st.experimental_rerun()
+        st.rerun()
 
     # --- Draw current frame ---
     nearest_t = timestamps[st.session_state.t_index]
