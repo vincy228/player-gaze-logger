@@ -22,7 +22,7 @@ if uploaded_file:
     if "t_index" not in st.session_state:
         st.session_state.t_index = 0
 
-    # --- Control buttons and slider ---
+    # --- Controls ---
     col1, col2 = st.columns([1, 4])
 
     with col1:
@@ -34,31 +34,34 @@ if uploaded_file:
                 st.session_state.playing = True
 
     with col2:
+        # Display the slider based on the current index
         selected_t = st.slider(
             "Select Timestamp",
             min_value=float(min(timestamps)),
             max_value=float(max(timestamps)),
             value=float(timestamps[st.session_state.t_index]),
             step=0.01,
-            key="timestamp_slider"
+            key="time_slider_display"
         )
 
-    # Sync t_index if user manually scrubs
-    st.session_state.t_index = min(
+    # --- Update index if user scrubs manually ---
+    manual_index = min(
         range(len(timestamps)),
         key=lambda i: abs(timestamps[i] - selected_t)
     )
+    if not st.session_state.playing:
+        st.session_state.t_index = manual_index
 
-    # --- Placeholder for live plot ---
+    # --- Placeholder for the live plot ---
     placeholder = st.empty()
 
-    # --- Main drawing function ---
+    # --- Drawing function ---
     def draw_frame(index):
         nearest_t = timestamps[index]
         frame = dynamic_df[dynamic_df["Timestamp"] == nearest_t]
 
         fig, ax = plt.subplots()
-        ax.scatter(static_df["PosX"], static_df["PosZ"], 
+        ax.scatter(static_df["PosX"], static_df["PosZ"],
                    c="green", marker="^", s=50, label="Tree")
 
         for cat in frame["Category"].unique():
@@ -75,21 +78,16 @@ if uploaded_file:
         ax.legend()
         placeholder.pyplot(fig)
 
-    # --- Handle playback loop ---
+    # --- Playback loop ---
     if st.session_state.playing:
-        for i in range(st.session_state.t_index, len(timestamps)):
-            if not st.session_state.playing:
-                break
+        if st.session_state.t_index >= len(timestamps) - 1:
+            st.session_state.t_index = 0  # restart if at end
 
-            st.session_state.t_index = i
-            draw_frame(i)
+        draw_frame(st.session_state.t_index)
+        time.sleep(0.2)
+        st.session_state.t_index += 1
+        st.rerun()
 
-            # Move slider visually (forces rerun)
-            st.session_state.timestamp_slider = float(timestamps[i])
-
-            time.sleep(0.2)
-            st.rerun()
-
-    # --- Manual view when not playing ---
     else:
+        # --- Manual display (paused) ---
         draw_frame(st.session_state.t_index)
