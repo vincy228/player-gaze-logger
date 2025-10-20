@@ -3,75 +3,61 @@ import pandas as pd
 import numpy as np
 import time
 
-st.set_page_config(page_title="VR Log Player", layout="wide")
+st.set_page_config(page_title="VR Gaze Playback", layout="wide")
 
-uploaded_file = st.file_uploader("Upload Unity Log CSV", type=["csv"])
+# --- Load your log file ---
+# Replace with your actual CSV path or uploader
+uploaded_file = st.file_uploader("Upload gaze log CSV", type=["csv"])
 
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
+    if 'timestamp' not in df.columns:
+        st.error("CSV must contain a 'timestamp' column.")
+    else:
+        timestamps = df['timestamp'].values
+        st.write(f"Loaded {len(timestamps)} frames from log file.")
 
-    # --- Detect existing time-like column without renaming ---
-    time_columns = [c for c in df.columns if any(x in c.lower() for x in ["time", "timestamp", "frame"])]
-    if not time_columns:
-        st.error("❌ No time-related column found. Please include one (e.g., time, timestamp, frame_time).")
-        st.stop()
+        # --- Playback controls ---
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            if "playing" not in st.session_state:
+                st.session_state.playing = True
+            if "current_idx" not in st.session_state:
+                st.session_state.current_idx = 0
+            if "play_speed" not in st.session_state:
+                st.session_state.play_speed = 1.0  # seconds per step
 
-    # Use the first matching column as the time reference
-    time_col = time_columns[0]
-    timestamps = df[time_col].values
-    st.write(f"🕒 Using time column: **{time_col}** ({len(timestamps)} entries)")
+            if st.button("⏯ Play / Pause"):
+                st.session_state.playing = not st.session_state.playing
 
-    # --- Session State ---
-    if "playing" not in st.session_state:
-        st.session_state.playing = True  # auto-play
-    if "idx" not in st.session_state:
-        st.session_state.idx = 0
-    if "speed" not in st.session_state:
-        st.session_state.speed = 1.0
+            st.session_state.play_speed = st.slider("Play speed (s/step)", 0.05, 1.0, st.session_state.play_speed, 0.05)
 
-    # --- Controls ---
-    c1, c2 = st.columns([1, 4])
-    with c1:
-        if st.button("⏯ Play / Pause"):
-            st.session_state.playing = not st.session_state.playing
+        with col2:
+            st.progress(st.session_state.current_idx / len(timestamps))
 
-        st.session_state.speed = st.slider(
-            "Playback Speed (×)", 0.25, 4.0, st.session_state.speed, 0.25
-        )
+        # --- Playback loop ---
+        placeholder = st.empty()
 
-    with c2:
-        st.progress(st.session_state.idx / len(timestamps))
+        while st.session_state.playing:
+            current_idx = st.session_state.current_idx
 
-    # --- Display placeholder ---
-    placeholder = st.empty()
+            # Stop at end and auto-reset
+            if current_idx >= len(timestamps):
+                st.session_state.playing = False
+                st.session_state.current_idx = 0
+                st.experimental_rerun()
 
-    # --- Playback loop ---
-    start_real_time = time.time()
-    start_log_time = timestamps[st.session_state.idx]
+            # Simulated "frame display"
+            placeholder.write(f"🎯 Frame {current_idx + 1}/{len(timestamps)} — Timestamp: {timestamps[current_idx]:.2f}")
 
-    while st.session_state.playing and st.session_state.idx < len(timestamps) - 1:
-        elapsed_real = time.time() - start_real_time
-        target_time = start_log_time + elapsed_real * st.session_state.speed
+            # Next frame
+            st.session_state.current_idx += 1
 
-        # Advance index while log time ≤ target time
-        while (
-            st.session_state.idx + 1 < len(timestamps)
-            and timestamps[st.session_state.idx + 1] <= target_time
-        ):
-            st.session_state.idx += 1
+            time.sleep(st.session_state.play_speed)
 
-        # Update display (you can replace this with your plot update)
-        placeholder.write(f"🎮 Playing frame {st.session_state.idx + 1}/{len(timestamps)}")
-
-        time.sleep(0.02)
-
-    # --- End or pause behavior ---
-    if st.session_state.idx >= len(timestamps) - 1:
-        st.session_state.idx = 0
-        st.session_state.playing = False
-        placeholder.write("🏁 Reached end of log — stopped.")
-    elif not st.session_state.playing:
-        placeholder.write(f"⏸ Paused at frame {st.session_state.idx + 1}/{len(timestamps)}")
+        # When paused, show current frame
+        if not st.session_state.playing and st.session_state.current_idx < len(timestamps):
+            placeholder.write(f"⏸ Paused at frame {st.session_state.current_idx + 1}/{len(timestamps)}")
 
 else:
-    st.info("📁 Please upload your Unity log CSV to begin playback.")
+    st.info("Please upload a log file to begin playback.")
